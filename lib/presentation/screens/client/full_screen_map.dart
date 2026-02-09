@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'dart:math' as math;
 import '../../../core/constants/app_colors.dart';
+import '../../../data/models/tracking_model.dart';
 import '../../widgets/custom_marker_helper.dart';
 
 class FullScreenMapScreen extends StatefulWidget {
   final LatLng driverLocation;
   final LatLng destinationLocation;
   final String driverName;
+  final TrackingModel? tracking; // ✅ Optional tracking data
 
   const FullScreenMapScreen({
     super.key,
     required this.driverLocation,
     required this.destinationLocation,
     required this.driverName,
+    this.tracking, // ✅ Accept tracking data
   });
 
   @override
@@ -55,11 +59,19 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen> {
         position: _currentDriverLocation,
         icon: _bikeMarker ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
         anchor: const Offset(0.5, 0.5),
+        infoWindow: InfoWindow(
+          title: widget.driverName,
+          snippet: 'Livreur',
+        ),
       ),
       // Destination
       Marker(
         markerId: const MarkerId('destination'),
         position: widget.destinationLocation,
+        infoWindow: InfoWindow(
+          title: 'Destination',
+          snippet: widget.tracking?.adresseText ?? 'Adresse de livraison',
+        ),
       ),
     };
   }
@@ -111,8 +123,85 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen> {
     _mapController?.animateCamera(CameraUpdate.zoomOut());
   }
 
+  // ✅ Calculate progress percentage based on status (FRONTEND)
+  double _getProgressPercentage() {
+    if (widget.tracking == null) return 0.75;
+    
+    switch (widget.tracking!.statut.toLowerCase()) {
+      case 'en attente':
+      case 'créé':
+        return 0.25;
+      case 'en collecte':
+      case 'collecte':
+        return 0.50;
+      case 'en cours':
+      case 'en transit':
+        return 0.75;
+      case 'livré':
+      case 'delivered':
+        return 1.0;
+      default:
+        return 0.25;
+    }
+  }
+
+  // ✅ Get status display text
+  String _getStatusText() {
+    if (widget.tracking == null) return 'En transit';
+    return widget.tracking!.statut;
+  }
+
+  // ✅ Calculate estimated time of arrival (FRONTEND - Option B)
+  String _calculateETA() {
+    // If backend provides ETA, use it
+    // if (widget.tracking?.estimatedArrival != null) {
+    //   return widget.tracking!.estimatedArrival;
+    // }
+    
+    // Simple calculation based on distance
+    // Assume average delivery speed of 30 km/h = 0.5 km/min
+    final distance = _calculateDistance(
+      _currentDriverLocation.latitude,
+      _currentDriverLocation.longitude,
+      widget.destinationLocation.latitude,
+      widget.destinationLocation.longitude,
+    );
+    
+    final minutes = (distance * 2).round(); // Rough estimate
+    
+    if (minutes < 1) return "< 1 min";
+    if (minutes > 60) return "${(minutes / 60).round()}h ${minutes % 60}min";
+    return "$minutes min";
+  }
+
+  // Helper: Calculate distance between two points (in kilometers)
+  double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+    const double earthRadius = 6371; // km
+    
+    final dLat = _toRadians(lat2 - lat1);
+    final dLon = _toRadians(lon2 - lon1);
+    
+    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_toRadians(lat1)) *
+            math.cos(_toRadians(lat2)) *
+            math.sin(dLon / 2) *
+            math.sin(dLon / 2);
+    
+    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    
+    return earthRadius * c;
+  }
+
+  double _toRadians(double degree) {
+    return degree * math.pi / 180;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final progress = _getProgressPercentage();
+    final statusText = _getStatusText();
+    final eta = _calculateETA(); // ✅ Calculate ETA dynamically
+
     return Scaffold(
       body: Stack(
         children: [
@@ -159,7 +248,7 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen> {
                   ),
                   child: const Icon(
                     Icons.arrow_back,
-                    color: Color(0xFF1F2937),
+                    color: AppColors.textDark,
                   ),
                 ),
               ),
@@ -190,7 +279,7 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen> {
                     ),
                     child: const Icon(
                       Icons.add,
-                      color: Color(0xFF1F2937),
+                      color: AppColors.textDark,
                       size: 15,
                     ),
                   ),
@@ -198,7 +287,7 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen> {
                 Container(
                   height: 1,
                   width: 48,
-                  color: const Color(0xFFE5E7EB),
+                  color: AppColors.divider,
                 ),
                 GestureDetector(
                   onTap: _zoomOut,
@@ -218,7 +307,7 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen> {
                     ),
                     child: const Icon(
                       Icons.remove,
-                      color: Color(0xFF1F2937),
+                      color: AppColors.textDark,
                       size: 15,
                     ),
                   ),
@@ -260,7 +349,7 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen> {
                     height: 4,
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE5E7EB),
+                      color: AppColors.divider,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -268,10 +357,10 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen> {
                     children: [
                       CircleAvatar(
                         radius: 24,
-                        backgroundColor: const Color(0xFF2563EB).withOpacity(0.1),
+                        backgroundColor: AppColors.primaryBlue.withOpacity(0.1),
                         child: const Icon(
                           Icons.delivery_dining,
-                          color: Color(0xFF2563EB),
+                          color: AppColors.primaryBlue,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -284,13 +373,15 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen> {
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
-                                color: Color(0xFF1F2937),
+                                color: AppColors.textDark,
                               ),
                             ),
+                            // ✅ REMOVED: Address line
+                            // Shows "Votre livreur" instead
                             const Text(
-                              'Arrivée estimée: 12:30',
+                              'Votre livreur',
                               style: TextStyle(
-                                color: Color(0xFF6B7280),
+                                color: AppColors.textGrey,
                                 fontSize: 13,
                               ),
                             ),
@@ -303,22 +394,22 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen> {
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF10B981).withOpacity(0.1),
+                          color: AppColors.success.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.access_time,
                               size: 16,
-                              color: Color(0xFF10B981),
+                              color: AppColors.success,
                             ),
-                            SizedBox(width: 4),
+                            const SizedBox(width: 4),
                             Text(
-                              '8 min',
-                              style: TextStyle(
-                                color: Color(0xFF10B981),
+                              eta, // ✅ Dynamic ETA
+                              style: const TextStyle(
+                                color: AppColors.success,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -330,20 +421,20 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen> {
                   const SizedBox(height: 16),
                   Column(
                     children: [
-                      const Row(
+                      Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'En transit',
-                            style: TextStyle(
+                            statusText,
+                            style: const TextStyle(
                               fontWeight: FontWeight.w500,
-                              color: Color(0xFF1F2937),
+                              color: AppColors.textDark,
                             ),
                           ),
                           Text(
-                            '75%',
-                            style: TextStyle(
-                              color: Color(0xFF2563EB),
+                            '${(progress * 100).toInt()}%',
+                            style: const TextStyle(
+                              color: AppColors.primaryBlue,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -352,11 +443,11 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen> {
                       const SizedBox(height: 8),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(4),
-                        child: const LinearProgressIndicator(
-                          value: 0.75,
-                          backgroundColor: Color(0xFFF3F4F6),
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Color(0xFF2563EB),
+                        child: LinearProgressIndicator(
+                          value: progress,
+                          backgroundColor: AppColors.inputBackground,
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                            AppColors.primaryBlue,
                           ),
                           minHeight: 6,
                         ),
@@ -371,8 +462,8 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen> {
                       icon: const Icon(Icons.my_location),
                       label: const Text('Recentrer la carte'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF2563EB),
-                        side: const BorderSide(color: Color(0xFF2563EB)),
+                        foregroundColor: AppColors.primaryBlue,
+                        side: const BorderSide(color: AppColors.primaryBlue),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),

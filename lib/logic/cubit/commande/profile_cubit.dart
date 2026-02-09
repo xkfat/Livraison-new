@@ -19,29 +19,31 @@ class ProfileError extends ProfileState {
   ProfileError(this.message);
 }
 
-// Cubit
+// Cubit - IMPROVED ERROR HANDLING
 class ProfileCubit extends Cubit<ProfileState> {
   final AuthRepository _authRepository;
 
   ProfileCubit(this._authRepository) : super(ProfileInitial());
 
-  /// Change password
+  /// Change password - IMPROVED ERROR HANDLING
   Future<void> changePassword({
     required String oldPassword,
     required String newPassword,
   }) async {
+    if (isClosed) return;
+    
     emit(ProfileLoading());
     
     try {
       print('📱 ProfileCubit: Starting password change...');
       
-      // Validate inputs
-      if (oldPassword.isEmpty) {
+      // Client-side validation
+      if (oldPassword.trim().isEmpty) {
         emit(ProfileError('L\'ancien mot de passe est requis'));
         return;
       }
       
-      if (newPassword.isEmpty) {
+      if (newPassword.trim().isEmpty) {
         emit(ProfileError('Le nouveau mot de passe est requis'));
         return;
       }
@@ -51,47 +53,78 @@ class ProfileCubit extends Cubit<ProfileState> {
         return;
       }
       
-      if (oldPassword == newPassword) {
+      if (oldPassword.trim() == newPassword.trim()) {
         emit(ProfileError('Le nouveau mot de passe doit être différent de l\'ancien'));
         return;
       }
       
-      // Call API
+      // Call API - let backend handle validation and provide error messages
       final response = await _authRepository.changePassword(
-        oldPassword: oldPassword,
-        newPassword: newPassword,
+        oldPassword: oldPassword.trim(),
+        newPassword: newPassword.trim(),
       );
       
-      final message = response['message'] as String? ?? 'Mot de passe modifié avec succès';
+      // Extract success message from backend
+      final message = response['message'] as String? ?? 
+                     response['detail'] as String? ?? 
+                     'Mot de passe modifié avec succès';
       
       print('✅ ProfileCubit: Password changed successfully');
-      emit(ProfileSuccess(message));
+      if (!isClosed) {
+        emit(ProfileSuccess(message));
+      }
       
     } on BadRequestException catch (e) {
       print('❌ ProfileCubit: Bad request - ${e.message}');
       
-      // Parse error message from Django
-      String errorMsg = e.message;
-      if (errorMsg.contains('incorrect')) {
-        errorMsg = 'Ancien mot de passe incorrect';
-      } else if (errorMsg.contains('8 caractères')) {
-        errorMsg = 'Le nouveau mot de passe doit contenir au moins 8 caractères';
+      // The backend error message should be displayed as-is
+      // Backend should provide user-friendly error messages
+      if (!isClosed) {
+        emit(ProfileError(e.message));
       }
-      
-      emit(ProfileError(errorMsg));
       
     } on UnauthorisedException catch (e) {
       print('❌ ProfileCubit: Unauthorized - ${e.message}');
-      emit(ProfileError('Session expirée. Veuillez vous reconnecter'));
+      if (!isClosed) {
+        emit(ProfileError('Session expirée. Veuillez vous reconnecter'));
+      }
+      
+    } on NoInternetException catch (e) {
+      print('❌ ProfileCubit: No internet - ${e.message}');
+      if (!isClosed) {
+        emit(ProfileError(e.message));
+      }
+      
+    } on TimeoutException catch (e) {
+      print('❌ ProfileCubit: Timeout - ${e.message}');
+      if (!isClosed) {
+        emit(ProfileError(e.message));
+      }
+      
+    } on FetchDataException catch (e) {
+      print('❌ ProfileCubit: Server error - ${e.message}');
+      if (!isClosed) {
+        emit(ProfileError(e.message));
+      }
+      
+    } on CustomException catch (e) {
+      print('❌ ProfileCubit: Custom error - ${e.message}');
+      if (!isClosed) {
+        emit(ProfileError(e.message));
+      }
       
     } catch (e) {
       print('❌ ProfileCubit: Unexpected error - $e');
-      emit(ProfileError('Erreur lors du changement de mot de passe'));
+      if (!isClosed) {
+        emit(ProfileError('Une erreur inattendue est survenue'));
+      }
     }
   }
 
   /// Reset to initial state
   void reset() {
-    emit(ProfileInitial());
+    if (!isClosed) {
+      emit(ProfileInitial());
+    }
   }
 }

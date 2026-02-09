@@ -10,15 +10,23 @@ class AuthCubit extends Cubit<AuthState> {
 
   AuthCubit(this._authRepository) : super(AuthInitial());
 
-  /// Login with username and password
+  /// Login with username and password - IMPROVED ERROR HANDLING
   Future<void> login(String username, String password) async {
+    if (isClosed) return;
+    
     emit(AuthLoading());
     
     try {
       print('📱 AuthCubit: Starting login process...');
       
+      // Validate inputs locally first
+      if (username.trim().isEmpty || password.isEmpty) {
+        emit(const AuthError('Veuillez remplir tous les champs'));
+        return;
+      }
+      
       // Step 1: Login and get tokens
-      final loginResponse = await _authRepository.login(username, password);
+      final loginResponse = await _authRepository.login(username.trim(), password);
       
       final accessToken = loginResponse['access'] as String;
       final refreshToken = loginResponse['refresh'] as String;
@@ -32,48 +40,54 @@ class AuthCubit extends Cubit<AuthState> {
       
       print('📱 AuthCubit: Tokens saved to SharedPreferences');
       
-      // Step 3: Set tokens in repository (already done in login, but ensure it's set)
-      _authRepository.setTokens(accessToken, refreshToken);
-      
-      // Step 4: Get user profile
+      // Step 3: Get user profile
       print('📱 AuthCubit: Fetching user profile...');
       final user = await _authRepository.getUserProfile();
       
       print('📱 AuthCubit: User profile loaded - ${user.username} (${user.role})');
 
-      // Step 5: Emit authenticated state
-      emit(AuthAuthenticated(
-        user: user,
-        accessToken: accessToken,
-        refreshToken: refreshToken,
-      ));
+      // Step 4: Emit authenticated state
+      if (!isClosed) {
+        emit(AuthAuthenticated(
+          user: user,
+          accessToken: accessToken,
+          refreshToken: refreshToken,
+        ));
+      }
       
       print('✅ AuthCubit: Login complete!');
       
     } on UnauthorisedException catch (e) {
-      print('❌ AuthCubit: Login failed - ${e.message}');
-      emit(AuthError(e.message));
+      print('❌ AuthCubit: Login failed - Unauthorized: ${e.message}');
+      if (!isClosed) emit(AuthError(e.message));
     } on BadRequestException catch (e) {
-      print('❌ AuthCubit: Login failed - ${e.message}');
-      emit(AuthError(e.message));
+      print('❌ AuthCubit: Login failed - Bad Request: ${e.message}');
+      if (!isClosed) emit(AuthError(e.message));
     } on NoInternetException catch (e) {
-      print('❌ AuthCubit: Login failed - ${e.message}');
-      emit(AuthError(e.message));
+      print('❌ AuthCubit: Login failed - No Internet: ${e.message}');
+      if (!isClosed) emit(AuthError(e.message));
     } on FetchDataException catch (e) {
-      print('❌ AuthCubit: Login failed - ${e.message}');
-      emit(AuthError(e.message));
+      print('❌ AuthCubit: Login failed - Server Error: ${e.message}');
+      if (!isClosed) emit(AuthError(e.message));
+    } on TimeoutException catch (e) {
+      print('❌ AuthCubit: Login failed - Timeout: ${e.message}');
+      if (!isClosed) emit(AuthError(e.message));
     } on CustomException catch (e) {
-      print('❌ AuthCubit: Login failed - ${e.message}');
-      emit(AuthError(e.message));
+      print('❌ AuthCubit: Login failed - Custom: ${e.message}');
+      if (!isClosed) emit(AuthError(e.message));
     } catch (e) {
       print('❌ AuthCubit: Login failed - Unknown error: $e');
-      emit(const AuthError('Erreur de connexion. Veuillez réessayer'));
+      if (!isClosed) emit(const AuthError('Erreur de connexion inattendue'));
     }
   }
 
   /// Try auto login from saved tokens
   Future<void> tryAutoLogin() async {
+    if (isClosed) return;
+    
     try {
+      print('🔄 AuthCubit: Attempting auto-login...');
+      
       final prefs = await SharedPreferences.getInstance();
       final accessToken = prefs.getString('access_token');
       final refreshToken = prefs.getString('refresh_token');
@@ -89,11 +103,13 @@ class AuthCubit extends Cubit<AuthState> {
           
           print('✅ AuthCubit: Auto-login successful - ${user.username}');
           
-          emit(AuthAuthenticated(
-            user: user,
-            accessToken: accessToken,
-            refreshToken: refreshToken,
-          ));
+          if (!isClosed) {
+            emit(AuthAuthenticated(
+              user: user,
+              accessToken: accessToken,
+              refreshToken: refreshToken,
+            ));
+          }
         } catch (e) {
           print('⚠️ AuthCubit: Saved token expired, attempting refresh...');
           
@@ -110,39 +126,47 @@ class AuthCubit extends Cubit<AuthState> {
             
             print('✅ AuthCubit: Token refreshed successfully');
             
-            emit(AuthAuthenticated(
-              user: user,
-              accessToken: newAccessToken,
-              refreshToken: refreshToken,
-            ));
+            if (!isClosed) {
+              emit(AuthAuthenticated(
+                user: user,
+                accessToken: newAccessToken,
+                refreshToken: refreshToken,
+              ));
+            }
           } else {
             print('❌ AuthCubit: Token refresh failed');
             // Refresh failed, clear tokens
             await prefs.clear();
-            emit(AuthUnauthenticated());
+            if (!isClosed) emit(AuthUnauthenticated());
           }
         }
       } else {
         print('📍 AuthCubit: No saved tokens found');
-        emit(AuthUnauthenticated());
+        if (!isClosed) emit(AuthUnauthenticated());
       }
     } catch (e) {
       print('❌ AuthCubit: Auto-login error - $e');
       // Clear invalid tokens
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
-      emit(AuthUnauthenticated());
+      if (!isClosed) emit(AuthUnauthenticated());
     }
   }
 
   /// Logout
   Future<void> logout() async {
     print('🔓 AuthCubit: Logging out...');
-    await _authRepository.logout();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-    emit(AuthUnauthenticated());
-    print('✅ AuthCubit: Logout complete');
+    try {
+      await _authRepository.logout();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+      if (!isClosed) emit(AuthUnauthenticated());
+      print('✅ AuthCubit: Logout complete');
+    } catch (e) {
+      print('⚠️ AuthCubit: Logout error (non-critical): $e');
+      // Still emit unauthenticated even if logout fails
+      if (!isClosed) emit(AuthUnauthenticated());
+    }
   }
 
   /// Toggle availability (for drivers)
@@ -157,32 +181,19 @@ class AuthCubit extends Cubit<AuthState> {
         final user = await _authRepository.getUserProfile();
         final currentState = state as AuthAuthenticated;
         
-        emit(AuthAuthenticated(
-          user: user,
-          accessToken: currentState.accessToken,
-          refreshToken: currentState.refreshToken,
-        ));
+        if (!isClosed) {
+          emit(AuthAuthenticated(
+            user: user,
+            accessToken: currentState.accessToken,
+            refreshToken: currentState.refreshToken,
+          ));
+        }
         
         print('✅ AuthCubit: Availability updated');
       } catch (e) {
         print('❌ AuthCubit: Failed to update availability - $e');
-        // Emit error but keep authenticated state
+        // Could emit an error state or just ignore for availability toggle
       }
-    }
-  }
-
-  /// Change password
-  Future<bool> changePassword(String oldPassword, String newPassword) async {
-    try {
-      print('🔄 AuthCubit: Changing password...');
-await _authRepository.changePassword(
-  oldPassword: oldPassword,
-  newPassword: newPassword,
-);      print('✅ AuthCubit: Password changed successfully');
-      return true;
-    } catch (e) {
-      print('❌ AuthCubit: Failed to change password - $e');
-      return false;
     }
   }
 
@@ -198,11 +209,13 @@ await _authRepository.changePassword(
         final user = await _authRepository.getUserProfile();
         final currentState = state as AuthAuthenticated;
         
-        emit(AuthAuthenticated(
-          user: user,
-          accessToken: currentState.accessToken,
-          refreshToken: currentState.refreshToken,
-        ));
+        if (!isClosed) {
+          emit(AuthAuthenticated(
+            user: user,
+            accessToken: currentState.accessToken,
+            refreshToken: currentState.refreshToken,
+          ));
+        }
         
         print('✅ AuthCubit: Profile photo uploaded');
         return true;
@@ -226,11 +239,13 @@ await _authRepository.changePassword(
         final user = await _authRepository.getUserProfile();
         final currentState = state as AuthAuthenticated;
         
-        emit(AuthAuthenticated(
-          user: user,
-          accessToken: currentState.accessToken,
-          refreshToken: currentState.refreshToken,
-        ));
+        if (!isClosed) {
+          emit(AuthAuthenticated(
+            user: user,
+            accessToken: currentState.accessToken,
+            refreshToken: currentState.refreshToken,
+          ));
+        }
         
         print('✅ AuthCubit: Profile photo deleted');
         return true;

@@ -53,28 +53,34 @@ class UserModel {
       'vehicle_info': vehicleInfo,
       'current_lat': currentLat,
       'current_long': currentLong,
+      'profile_photo_url': profilePhotoUrl,
     };
   }
 
-  // Helper getters
-  bool get isDriver => role == 'LIVREUR';
-  bool get isAdmin => role == 'ADMIN';
-  bool get isGestionnaire => role == 'GESTIONNAIRE';
-  bool get isClient => role == 'CLIENT';
+  // --- Getters de Rôles (Insensibles à la casse) ---
+  
+  // Correction cruciale : on compare en majuscules pour correspondre à "Livreur", "LIVREUR" ou "livreur"
+  bool get isDriver => role.toUpperCase() == 'LIVREUR';
+  bool get isAdmin => role.toUpperCase() == 'ADMIN';
+  bool get isGestionnaire => role.toUpperCase() == 'GESTIONNAIRE';
+  bool get isClient => role.toUpperCase() == 'CLIENT';
 
-  // Get display name
+  // --- Getters d'Affichage ---
+
   String get displayName => username;
 
-  // Get initials for avatar
+  // Récupère les initiales (ex: "John Doe" -> "JD", "Vatimetou" -> "V")
   String get initials {
-    final parts = username.split(' ');
-    if (parts.length >= 2) {
+    if (username.isEmpty) return "?";
+    final parts = username.trim().split(' ');
+    if (parts.length >= 2 && parts[1].isNotEmpty) {
       return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     }
     return username.substring(0, 1).toUpperCase();
   }
 
-  // Copy with method for updates
+  // --- Méthode CopyWith ---
+
   UserModel copyWith({
     int? id,
     String? username,

@@ -28,6 +28,11 @@ class AppColors {
   static const Color statusLivre = Color(0xFF10B981);
   static const Color statusAnnule = Color(0xFFEF4444);
   
+static const Color inputBackground = Color(0xFFF3F4F6);
+  // UI Elements
+  static const Color divider = Color(0xFFE5E7EB);
+  static const Color shadow = Color(0x1A000000);
+  
   // Gradient
   static const LinearGradient primaryGradient = LinearGradient(
     colors: [primaryBlue, primaryDark],

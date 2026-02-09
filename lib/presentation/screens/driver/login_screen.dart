@@ -40,23 +40,22 @@ class _LoginScreenState extends State<LoginScreen> {
             
             // Navigate based on user role
             final user = state.user;
+            print('👤 User Role: ${user.role}'); 
+  print('🏎️ Is Driver: ${user.isDriver}');
             if (user.isDriver) {
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const MainScreen()),
                 (route) => false,
               );
             } else {
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (_) => const ClientLoginScreen()),
-                (route) => false,
-              );
-            }
+              _hasNavigated = false; 
+      _showErrorDialog("Accès refusé : Vous n'êtes pas un livreur.");
+    }
           } else if (state is AuthError) {
-            // ✅ Show error dialog and STAY on login screen
-            print('❌ Login Screen: Login failed - ${state.message}');
-            _showErrorDialog(state.message);
-          }
-        },
+        _hasNavigated = false;
+    _showErrorDialog(state.message);
+  }
+},
         builder: (context, state) {
           final keyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
 
@@ -206,7 +205,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               decoration: InputDecoration(
                                 filled: true,
                                 fillColor: AppColors.cardBackground,
-                                hintText: 'livreur_2',
+                                hintText: 'Votre nom d\'utilisateur',
                                 hintStyle: const TextStyle(
                                   color: AppColors.textGrey,
                                 ),
@@ -229,16 +228,29 @@ class _LoginScreenState extends State<LoginScreen> {
                                     width: 2,
                                   ),
                                 ),
+                                errorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(
+                                    color: AppColors.error,
+                                    width: 1,
+                                  ),
+                                ),
+                                focusedErrorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(
+                                    color: AppColors.error,
+                                    width: 2,
+                                  ),
+                                ),
                                 contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 16,
                                   vertical: 16,
                                 ),
-                                // ✅ Hidden validator (returns empty string)
-                                errorStyle: const TextStyle(height: 0),
+                                errorStyle: const TextStyle(height: 0, fontSize: 0),
                               ),
                               validator: (value) {
                                 if (value == null || value.trim().isEmpty) {
-                                  return ''; // ✅ Return empty to trigger error state
+                                  return '';
                                 }
                                 return null;
                               },
@@ -301,16 +313,29 @@ class _LoginScreenState extends State<LoginScreen> {
                                     width: 2,
                                   ),
                                 ),
+                                errorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(
+                                    color: AppColors.error,
+                                    width: 1,
+                                  ),
+                                ),
+                                focusedErrorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(
+                                    color: AppColors.error,
+                                    width: 2,
+                                  ),
+                                ),
                                 contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 16,
                                   vertical: 16,
                                 ),
-                                // ✅ Hidden validator (returns empty string)
-                                errorStyle: const TextStyle(height: 0),
+                                errorStyle: const TextStyle(height: 0, fontSize: 0),
                               ),
                               validator: (value) {
                                 if (value == null || value.isEmpty) {
-                                  return ''; // ✅ Return empty to trigger error state
+                                  return '';
                                 }
                                 return null;
                               },
@@ -396,10 +421,11 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// Show error dialog with backend error message
   void _showErrorDialog(String message) {
     showDialog(
       context: context,
-      barrierDismissible: true, // ✅ Allow dismiss by tapping outside
+      barrierDismissible: true,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
@@ -435,17 +461,14 @@ class _LoginScreenState extends State<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              message,
+              message, // ✅ Display backend error message directly
               style: const TextStyle(
                 fontSize: 15,
                 color: AppColors.textDark,
               ),
             ),
-            // ✅ Show solutions box for server errors
-            if (message.contains('serveur') || 
-                message.contains('connexion') ||
-                message.toLowerCase().contains('network') ||
-                message.toLowerCase().contains('timeout')) ...[
+            // Show solutions for connection errors
+            if (_isConnectionError(message)) ...[
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -497,11 +520,17 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  bool _isConnectionError(String message) {
+    final connectionKeywords = [
+      'serveur', 'connexion', 'network', 'timeout', 
+      'internet', 'django', 'démarré'
+    ];
+    return connectionKeywords.any((keyword) => 
+        message.toLowerCase().contains(keyword));
+  }
+
   IconData _getErrorIcon(String message) {
-    if (message.contains('serveur') || 
-        message.contains('connexion') ||
-        message.toLowerCase().contains('network') ||
-        message.toLowerCase().contains('timeout')) {
+    if (_isConnectionError(message)) {
       return Icons.cloud_off;
     } else if (message.contains('incorrect') || 
                message.contains('invalide') ||
@@ -515,10 +544,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Color _getErrorColor(String message) {
-    if (message.contains('serveur') || 
-        message.contains('connexion') ||
-        message.toLowerCase().contains('network') ||
-        message.toLowerCase().contains('timeout')) {
+    if (_isConnectionError(message)) {
       return AppColors.warning;
     }
     return AppColors.error;

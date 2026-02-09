@@ -32,6 +32,7 @@ class ApiService {
   void setTokens(String access, String refresh) {
     _accessToken = access;
     _refreshToken = refresh;
+    print('🔑 ApiService: Global token has been set: ${access.substring(0, 10)}...');
     print('✅ ApiService: Tokens set successfully');
   }
 
@@ -70,6 +71,8 @@ class ApiService {
       final url = Uri.parse('$baseUrl$endpoint');
       final requestHeaders = _buildHeaders(headers, needsAuth);
 
+      print('🔄 API GET: $url');
+
       final response = await http
           .get(url, headers: requestHeaders)
           .timeout(requestTimeout, onTimeout: () {
@@ -93,6 +96,9 @@ class ApiService {
         'Le serveur est peut-être arrêté.'
       );
     } catch (e) {
+      if (e is CustomException) {
+        rethrow;
+      }
       throw CustomException('Erreur inattendue: ${e.toString()}');
     }
   }
@@ -107,6 +113,11 @@ class ApiService {
     try {
       final url = Uri.parse('$baseUrl$endpoint');
       final requestHeaders = _buildHeaders(headers, needsAuth);
+
+      print('🔄 API POST: $url');
+      if (body != null) {
+        print('📦 Request Body: ${body.keys.map((k) => k == 'password' ? '$k: ***' : '$k: ${body[k]}').join(', ')}');
+      }
 
       final response = await http
           .post(
@@ -135,6 +146,9 @@ class ApiService {
         'Le serveur est peut-être arrêté.'
       );
     } catch (e) {
+      if (e is CustomException) {
+        rethrow;
+      }
       throw CustomException('Erreur inattendue: ${e.toString()}');
     }
   }
@@ -149,6 +163,8 @@ class ApiService {
     try {
       final url = Uri.parse('$baseUrl$endpoint');
       final requestHeaders = _buildHeaders(headers, needsAuth);
+
+      print('🔄 API PATCH: $url');
 
       final response = await http
           .patch(
@@ -171,6 +187,9 @@ class ApiService {
     } on http.ClientException {
       throw NoInternetException('Erreur de connexion au serveur');
     } catch (e) {
+      if (e is CustomException) {
+        rethrow;
+      }
       throw CustomException('Erreur: ${e.toString()}');
     }
   }
@@ -204,6 +223,9 @@ class ApiService {
     } on http.ClientException {
       throw NoInternetException('Erreur de connexion au serveur');
     } catch (e) {
+      if (e is CustomException) {
+        rethrow;
+      }
       throw CustomException('Erreur: ${e.toString()}');
     }
   }
@@ -232,6 +254,9 @@ class ApiService {
     } on http.ClientException {
       throw NoInternetException('Erreur de connexion au serveur');
     } catch (e) {
+      if (e is CustomException) {
+        rethrow;
+      }
       throw CustomException('Erreur: ${e.toString()}');
     }
   }
@@ -282,6 +307,9 @@ class ApiService {
     } on http.ClientException {
       throw NoInternetException('Erreur de connexion au serveur');
     } catch (e) {
+      if (e is CustomException) {
+        rethrow;
+      }
       throw CustomException('Erreur de téléchargement: ${e.toString()}');
     }
   }
@@ -307,9 +335,11 @@ class ApiService {
     return headers;
   }
 
-  /// Handle HTTP response
+  /// Handle HTTP response - IMPROVED ERROR HANDLING
   dynamic _handleResponse(http.Response response) {
     final statusCode = response.statusCode;
+
+    print('📡 API Response: $statusCode - ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}');
 
     if (statusCode >= 200 && statusCode < 300) {
       if (response.body.isEmpty) return {};
@@ -320,17 +350,42 @@ class ApiService {
       }
     }
 
-    // Handle error responses
+    // Handle error responses - Parse backend error messages properly
     String errorMessage = 'Une erreur est survenue';
+    Map<String, dynamic>? errorDetails;
     
     try {
       final errorBody = jsonDecode(response.body);
-      if (errorBody is Map) {
-        // Try to extract error message from common formats
-        errorMessage = errorBody['error'] ??
-            errorBody['message'] ??
-            errorBody['detail'] ??
-            errorBody.toString();
+      if (errorBody is Map<String, dynamic>) {
+        // Extract error details for validation errors
+        errorDetails = errorBody;
+        
+        // Priority order for error message extraction
+        if (errorBody.containsKey('detail')) {
+          errorMessage = errorBody['detail'];
+        } else if (errorBody.containsKey('error')) {
+          errorMessage = errorBody['error'];
+        } else if (errorBody.containsKey('message')) {
+          errorMessage = errorBody['message'];
+        } else if (errorBody.containsKey('non_field_errors')) {
+          final errors = errorBody['non_field_errors'];
+          if (errors is List && errors.isNotEmpty) {
+            errorMessage = errors.first.toString();
+          }
+        } else {
+          // Extract first field error
+          final fieldErrors = <String>[];
+          errorBody.forEach((key, value) {
+            if (value is List && value.isNotEmpty) {
+              fieldErrors.add(value.first.toString());
+            } else if (value is String) {
+              fieldErrors.add(value);
+            }
+          });
+          if (fieldErrors.isNotEmpty) {
+            errorMessage = fieldErrors.first;
+          }
+        }
       }
     } catch (e) {
       errorMessage = response.body.isNotEmpty 
@@ -338,15 +393,28 @@ class ApiService {
           : 'Erreur du serveur (${response.statusCode})';
     }
 
+    print('🔍 API Error - Status: $statusCode, Message: $errorMessage');
+
     switch (statusCode) {
       case 400:
         throw BadRequestException(errorMessage);
       case 401:
-        throw UnauthorisedException('Session expirée. Veuillez vous reconnecter.');
+        // Use backend message if available, otherwise default
+        if (errorMessage.contains('Invalid credentials') || 
+errorMessage.contains('Unable to log in') ||
+      errorMessage.contains('Incorrect') ||
+      errorMessage.contains('incorrect') ||
+      errorMessage.contains('No active account found')) { // <--- AJOUTEZ CECI
+    throw UnauthorisedException('Nom d\'utilisateur ou mot de passe incorrect');
+  
+        }
+        throw UnauthorisedException(errorMessage.isNotEmpty ? errorMessage : 'Session expirée. Veuillez vous reconnecter.');
       case 403:
-        throw UnauthorisedException('Accès refusé');
+        throw UnauthorisedException(errorMessage.isNotEmpty ? errorMessage : 'Accès refusé');
       case 404:
-        throw NotFoundException('Ressource non trouvée');
+        throw NotFoundException(errorMessage.isNotEmpty ? errorMessage : 'Ressource non trouvée');
+      case 422:
+        throw InvalidInputException(errorMessage);
       case 500:
       case 502:
       case 503:

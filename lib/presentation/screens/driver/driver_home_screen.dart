@@ -1,3 +1,4 @@
+import 'package:deliverli/data/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/constants/app_colors.dart';
@@ -15,13 +16,29 @@ class DriverHomeScreen extends StatefulWidget {
 }
 
 class _DriverHomeScreenState extends State<DriverHomeScreen> {
-  @override
-  void initState() {
-    super.initState();
-    // Load today's deliveries
-    context.read<CommandeCubit>().loadTodayCommandes();
-  }
+ // Dans presentation/screens/driver/main_screen.dart
 
+// presentation/screens/driver/main_screen.dart
+
+@override
+void initState() {
+  super.initState();
+  
+  // Wait a split second for the provider tree to stabilize
+  Future.delayed(const Duration(milliseconds: 300), () {
+    if (mounted) {
+      final authState = context.read<AuthCubit>().state;
+      
+      if (authState is AuthAuthenticated) {
+        // Double check synchronization
+        context.read<ApiService>().setTokens(authState.accessToken, authState.refreshToken);
+        
+        print('📦 MainScreen: Loading commandes for ${authState.user.username}');
+        context.read<CommandeCubit>().loadTodayCommandes();
+      }
+    }
+  });
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
