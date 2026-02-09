@@ -1,76 +1,70 @@
 /// Base custom exception class
 class CustomException implements Exception {
-  final dynamic _message;
-  final dynamic _prefix;
+  final String message;
   
-  CustomException([this._message, this._prefix]);
-  
+  const CustomException(this.message);
+
   @override
-  String toString() {
-    return '$_prefix: $_message';
-  }
-  
-  String get message => _message?.toString() ?? 'Une erreur est survenue';
+  String toString() => message;
 }
 
-/// Network/Server errors (500)
+/// Network/Server errors (500, 502, 503)
 class FetchDataException extends CustomException {
-  FetchDataException([String? message])
-      : super(message ?? 'Erreur de communication avec le serveur', 
-              'Erreur de Communication');
+  const FetchDataException([String? message])
+      : super(message ?? 'Erreur de communication avec le serveur');
 }
 
 /// Invalid request (400)
 class BadRequestException extends CustomException {
-  BadRequestException([message]) 
-      : super(message ?? 'Requête invalide', 'Requête Invalide');
+  const BadRequestException([String? message])
+      : super(message ?? 'Requête invalide');
 }
 
 /// Resource not found (404)
 class NotFoundException extends CustomException {
-  NotFoundException([message]) 
-      : super(message ?? 'Ressource introuvable', 'Non Trouvé');
+  const NotFoundException([String? message])
+      : super(message ?? 'Ressource introuvable');
 }
 
-/// Authentication errors (401)
+/// Authentication errors (401, 403)
 class UnauthorisedException extends CustomException {
-  UnauthorisedException([message]) 
-      : super(message ?? 'Session expirée', 'Non Autorisé');
+  const UnauthorisedException([String? message])
+      : super(message ?? 'Session expirée. Veuillez vous reconnecter.');
 }
 
 /// Validation errors (422)
 class InvalidInputException extends CustomException {
-  InvalidInputException([String? message]) 
-      : super(message ?? 'Données invalides', 'Entrée Invalide');
+  const InvalidInputException([String? message])
+      : super(message ?? 'Données invalides');
 }
 
 /// Network connectivity errors
 class NoInternetException extends CustomException {
-  NoInternetException() 
-      : super('Pas de connexion Internet', 'Erreur de Connexion');
+  const NoInternetException([String? message])
+      : super(message ?? 'Pas de connexion Internet.\nVérifiez votre connexion.');
 }
 
 /// Timeout errors
 class TimeoutException extends CustomException {
-  TimeoutException() 
-      : super('Délai d\'attente dépassé', 'Timeout');
+  const TimeoutException([String? message])
+      : super(message ?? 'Délai d\'attente dépassé');
 }
 
 /// Failure class for detailed error information
 class Failure {
   final int? code;
-  final String? message;
+  final String message;
   final Map<String, dynamic>? details;
-  
-  Failure({
-    this.message, 
+
+  const Failure({
+    required this.message,
     this.code,
     this.details,
   });
-  
+
   @override
-  String toString() => message ?? 'Une erreur est survenue';
-  
+  String toString() => message;
+
   /// Get user-friendly error message
   String get userMessage {
     if (details != null && details!.isNotEmpty) {
@@ -86,6 +80,6 @@ class Failure {
         return errors.join('\n');
       }
     }
-    return message ?? 'Une erreur est survenue';
+    return message;
   }
 }

@@ -8,7 +8,7 @@ class CommandeRepository {
 
   /// Get all commandes (filtered by role on backend)
   Future<List<CommandeModel>> getCommandes() async {
-    final response = await _apiService.get('/commandes/');
+    final response = await _apiService.get('/commandes/', needsAuth: true);
     
     if (response is List) {
       return response

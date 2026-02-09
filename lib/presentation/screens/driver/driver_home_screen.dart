@@ -80,13 +80,16 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                             color: Color(0xFFEF4444),
                           ),
                           const SizedBox(height: 16),
-                          Text(
-                            state.message,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              color: Color(0xFF1F2937),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 32),
+                            child: Text(
+                              state.message,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: Color(0xFF1F2937),
+                              ),
+                              textAlign: TextAlign.center,
                             ),
-                            textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 24),
                           ElevatedButton(
@@ -208,62 +211,82 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                       ],
                     ),
                   ),
-                  // Availability Toggle
-                  InkWell(
-                    onTap: () {
-                      context.read<AuthCubit>().toggleAvailability(
-                        !user.isAvailable,
-                      );
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            user.isAvailable
-                                ? 'Vous êtes maintenant indisponible'
-                                : 'Vous êtes maintenant disponible',
-                          ),
-                          duration: const Duration(seconds: 2),
-                          backgroundColor: user.isAvailable
-                              ? const Color(0xFFF59E0B)
-                              : const Color(0xFF10B981),
-                        ),
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: user.isAvailable
-                            ? const Color(0xFF10B981)
-                            : Colors.white.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            user.isAvailable ? Icons.check_circle : Icons.cancel,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            user.isAvailable ? 'Disponible' : 'Indisponible',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  // ✅ FIXED: Availability Toggle that updates properly
+                  _buildAvailabilityToggle(user),
                 ],
               ),
             ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ✅ FIXED: Separate method for availability toggle
+  Widget _buildAvailabilityToggle(user) {
+    // Use BlocBuilder to rebuild when auth state changes
+    return BlocBuilder<AuthCubit, AuthState>(
+      builder: (context, state) {
+        if (state is! AuthAuthenticated) return const SizedBox();
+        
+        final currentUser = state.user;
+        final isAvailable = currentUser.isAvailable;
+
+        return InkWell(
+          onTap: () async {
+            print('🔄 Toggling availability from $isAvailable to ${!isAvailable}');
+            
+            // Toggle availability
+            await context.read<AuthCubit>().toggleAvailability(!isAvailable);
+            
+            // Show feedback
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    !isAvailable
+                        ? 'Vous êtes maintenant disponible'
+                        : 'Vous êtes maintenant indisponible',
+                  ),
+                  duration: const Duration(seconds: 2),
+                  backgroundColor: !isAvailable
+                      ? const Color(0xFF10B981)
+                      : const Color(0xFFF59E0B),
+                ),
+              );
+            }
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 10,
+            ),
+            decoration: BoxDecoration(
+              color: isAvailable
+                  ? const Color(0xFF10B981)
+                  : Colors.white.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isAvailable ? Icons.check_circle : Icons.cancel,
+                  color: Colors.white,
+                  size: 18,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  isAvailable ? 'Disponible' : 'Indisponible',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -630,6 +653,9 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
         title: const Text('Confirmer la livraison'),
         content: Text(
           'Confirmer que le colis ${commande.trackingId} a été livré à ${commande.clientName} ?',

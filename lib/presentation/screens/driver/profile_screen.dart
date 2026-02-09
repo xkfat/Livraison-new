@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:deliverli/presentation/screens/driver/change_password_screen.dart';
+import 'package:deliverli/presentation/screens/splash/welcome_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
@@ -160,7 +162,14 @@ class ProfileScreen extends StatelessWidget {
                         context,
                         Icons.lock,
                         'Changer le mot de passe',
-                        () => _showChangePasswordDialog(context),
+                        () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ChangePasswordScreen(),
+                            ),
+                          );
+                        },
                       ),
                       const SizedBox(height: 12),
                       
@@ -307,7 +316,7 @@ class ProfileScreen extends StatelessWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => SafeArea(
+      builder: (bottomSheetContext) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -317,7 +326,9 @@ class ProfileScreen extends StatelessWidget {
                 leading: const Icon(Icons.camera_alt, color: AppColors.primaryBlue),
                 title: const Text('Prendre une photo'),
                 onTap: () {
-                  Navigator.pop(context);
+                  // ✅ FIX: Close bottom sheet first, then pick image
+                  Navigator.pop(bottomSheetContext);
+                  // Use the original context, not bottomSheetContext
                   _pickImage(context, ImageSource.camera);
                 },
               ),
@@ -325,7 +336,7 @@ class ProfileScreen extends StatelessWidget {
                 leading: const Icon(Icons.photo_library, color: AppColors.primaryBlue),
                 title: const Text('Choisir de la galerie'),
                 onTap: () {
-                  Navigator.pop(context);
+                  Navigator.pop(bottomSheetContext);
                   _pickImage(context, ImageSource.gallery);
                 },
               ),
@@ -333,7 +344,7 @@ class ProfileScreen extends StatelessWidget {
                 leading: const Icon(Icons.delete, color: AppColors.error),
                 title: const Text('Supprimer la photo'),
                 onTap: () {
-                  Navigator.pop(context);
+                  Navigator.pop(bottomSheetContext);
                   _deletePhoto(context);
                 },
               ),
@@ -345,15 +356,26 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Future<void> _pickImage(BuildContext context, ImageSource source) async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: source);
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
 
-    if (image != null) {
-      final success = await context.read<AuthCubit>().uploadProfilePhoto(
-            File(image.path),
-          );
+      if (image != null) {
+        // ✅ FIX: Check if widget is still mounted before using context
+        if (!context.mounted) return;
+        
+        final success = await context.read<AuthCubit>().uploadProfilePhoto(
+              File(image.path),
+            );
 
-      if (context.mounted) {
+        // ✅ FIX: Check again before showing SnackBar
+        if (!context.mounted) return;
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -365,13 +387,27 @@ class ProfileScreen extends StatelessWidget {
           ),
         );
       }
+    } catch (e) {
+      print('❌ Error picking image: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Erreur lors de la sélection de l\'image'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
   }
 
   Future<void> _deletePhoto(BuildContext context) async {
-    final success = await context.read<AuthCubit>().deleteProfilePhoto();
+    try {
+      if (!context.mounted) return;
+      
+      final success = await context.read<AuthCubit>().deleteProfilePhoto();
 
-    if (context.mounted) {
+      if (!context.mounted) return;
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -382,116 +418,85 @@ class ProfileScreen extends StatelessWidget {
           backgroundColor: success ? AppColors.success : AppColors.error,
         ),
       );
+    } catch (e) {
+      print('❌ Error deleting photo: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Erreur lors de la suppression'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
-  }
-
-  void _showChangePasswordDialog(BuildContext context) {
-    final oldPasswordController = TextEditingController();
-    final newPasswordController = TextEditingController();
-    final confirmPasswordController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Changer le mot de passe'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: oldPasswordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Ancien mot de passe',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: newPasswordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Nouveau mot de passe',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: confirmPasswordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Confirmer le mot de passe',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Annuler'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (newPasswordController.text != confirmPasswordController.text) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Les mots de passe ne correspondent pas'),
-                    backgroundColor: AppColors.error,
-                  ),
-                );
-                return;
-              }
-
-              Navigator.pop(dialogContext);
-              
-              final success = await context.read<AuthCubit>().changePassword(
-                    oldPasswordController.text,
-                    newPasswordController.text,
-                  );
-
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      success
-                          ? 'Mot de passe changé avec succès'
-                          : 'Erreur lors du changement de mot de passe',
-                    ),
-                    backgroundColor: success ? AppColors.success : AppColors.error,
-                  ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryBlue,
-            ),
-            child: const Text('Confirmer'),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Déconnexion'),
-        content: const Text('Voulez-vous vraiment vous déconnecter ?'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.error.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.logout,
+                color: AppColors.error,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Déconnexion',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Voulez-vous vraiment vous déconnecter ?',
+          style: TextStyle(fontSize: 15),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.textGrey,
+            ),
             child: const Text('Annuler'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(dialogContext);
-              context.read<AuthCubit>().logout();
+              await context.read<AuthCubit>().logout();
+              
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (_) => const ForkScreen(),
+                  ),
+                  (route) => false,
+                );
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             ),
-            child: const Text('Déconnexion'),
+            child: const Text(
+              'Déconnexion',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),

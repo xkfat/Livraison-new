@@ -76,18 +76,30 @@ class _ClientLoginScreenState extends State<ClientLoginScreen> {
                     child: AnimatedOpacity(
                       opacity: keyboardVisible ? 0.0 : 1.0,
                       duration: const Duration(milliseconds: 200),
-                      child: Image.asset(
-                        'assets/images/Logo.png',
-                        height: keyboardVisible ? 0 : 200,
-                        fit: BoxFit.contain,
+                      child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Image.asset(
+          'assets/images/Logo.png',
+          height: keyboardVisible ? 0 : 200,
+          fit: BoxFit.contain,
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'Espace Client',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: AppColors.primaryBlue
+                  ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ],
-              ),
+                ], 
+              ),   
             ),
-
-            // BOTTOM SECTION - Form card
             Expanded(
               child: Container(
                 width: double.infinity,
@@ -168,7 +180,7 @@ class _ClientLoginScreenState extends State<ClientLoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                    ],
+               ],
                   ),
                 ),
               ),
