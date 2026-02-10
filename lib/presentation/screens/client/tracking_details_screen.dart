@@ -122,10 +122,7 @@ class _TrackingDetailsScreenState extends State<TrackingDetailsScreen> {
               driverName,
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textDark),
             ),
-            const Text(
-              'Votre livreur',
-              style: TextStyle(color: AppColors.textGrey, fontSize: 14),
-            ),
+          
             const SizedBox(height: 24),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -524,7 +521,7 @@ class _TrackingDetailsScreenState extends State<TrackingDetailsScreen> {
     // ✅ Use destination coordinates from backend, fallback to default
     final LatLng destinationLocation = tracking.hasDestinationLocation
         ? LatLng(tracking.destinationLat!, tracking.destinationLong!)
-        : const LatLng(34.025, -6.835); // Fallback if no destination coords
+        : const LatLng(33.9716, -6.8498); // Fallback if no destination coords
     
     // ✅ Get driver location from tracking data or use default
     final LatLng driverLocation = tracking.hasDriverLocation

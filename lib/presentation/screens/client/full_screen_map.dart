@@ -151,15 +151,8 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen> {
     return widget.tracking!.statut;
   }
 
-  // ✅ Calculate estimated time of arrival (FRONTEND - Option B)
+  // ✅ Calculate accurate ETA based on real distance and realistic speed
   String _calculateETA() {
-    // If backend provides ETA, use it
-    // if (widget.tracking?.estimatedArrival != null) {
-    //   return widget.tracking!.estimatedArrival;
-    // }
-    
-    // Simple calculation based on distance
-    // Assume average delivery speed of 30 km/h = 0.5 km/min
     final distance = _calculateDistance(
       _currentDriverLocation.latitude,
       _currentDriverLocation.longitude,
@@ -167,11 +160,25 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen> {
       widget.destinationLocation.longitude,
     );
     
-    final minutes = (distance * 2).round(); // Rough estimate
+    // Urban delivery speed: 15 km/h (realistic for city delivery with traffic)
+    final hours = distance / 15;
+    final minutes = (hours * 60).round();
     
     if (minutes < 1) return "< 1 min";
     if (minutes > 60) return "${(minutes / 60).round()}h ${minutes % 60}min";
     return "$minutes min";
+  }
+
+  // ✅ Get remaining distance in km
+  String _getRemainingDistance() {
+    final distance = _calculateDistance(
+      _currentDriverLocation.latitude,
+      _currentDriverLocation.longitude,
+      widget.destinationLocation.latitude,
+      widget.destinationLocation.longitude,
+    );
+    
+    return '${distance.toStringAsFixed(1)} km restants';
   }
 
   // Helper: Calculate distance between two points (in kilometers)
@@ -200,7 +207,8 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen> {
   Widget build(BuildContext context) {
     final progress = _getProgressPercentage();
     final statusText = _getStatusText();
-    final eta = _calculateETA(); // ✅ Calculate ETA dynamically
+    final eta = _calculateETA(); // ✅ Calculate accurate ETA
+    final remainingDistance = _getRemainingDistance(); // ✅ Get km distance
 
     return Scaffold(
       body: Stack(
@@ -376,11 +384,10 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen> {
                                 color: AppColors.textDark,
                               ),
                             ),
-                            // ✅ REMOVED: Address line
-                            // Shows "Votre livreur" instead
-                            const Text(
-                              'Votre livreur',
-                              style: TextStyle(
+                            // ✅ REPLACED "Votre livreur" with remaining distance
+                            Text(
+                              remainingDistance,
+                              style: const TextStyle(
                                 color: AppColors.textGrey,
                                 fontSize: 13,
                               ),
@@ -407,7 +414,7 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen> {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              eta, // ✅ Dynamic ETA
+                              eta, // ✅ Accurate ETA based on real distance
                               style: const TextStyle(
                                 color: AppColors.success,
                                 fontWeight: FontWeight.bold,

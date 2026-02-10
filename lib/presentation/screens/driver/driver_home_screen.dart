@@ -6,6 +6,8 @@ import '../../../logic/cubit/auth/auth_cubit.dart';
 import '../../../logic/cubit/auth/auth_state.dart';
 import '../../../logic/cubit/commande/commande_cubit.dart';
 import '../../../logic/cubit/commande/commande_state.dart';
+import '../../../data/repositories/location_repository.dart';
+import '../../../data/services/location_service.dart';
 import 'delivery_details_screen.dart';
 
 class DriverHomeScreen extends StatefulWidget {
@@ -16,29 +18,61 @@ class DriverHomeScreen extends StatefulWidget {
 }
 
 class _DriverHomeScreenState extends State<DriverHomeScreen> {
- // Dans presentation/screens/driver/main_screen.dart
-
-// presentation/screens/driver/main_screen.dart
-
-@override
-void initState() {
-  super.initState();
+  // ✅ Location service for 5-second updates
+  LocationService? _locationService;
   
-  // Wait a split second for the provider tree to stabilize
-  Future.delayed(const Duration(milliseconds: 300), () {
-    if (mounted) {
-      final authState = context.read<AuthCubit>().state;
-      
-      if (authState is AuthAuthenticated) {
-        // Double check synchronization
-        context.read<ApiService>().setTokens(authState.accessToken, authState.refreshToken);
+  @override
+  void initState() {
+    super.initState();
+    
+    // Wait a split second for the provider tree to stabilize
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        final authState = context.read<AuthCubit>().state;
         
-        print('📦 MainScreen: Loading commandes for ${authState.user.username}');
-        context.read<CommandeCubit>().loadTodayCommandes();
+        if (authState is AuthAuthenticated) {
+          // Double check synchronization
+          context.read<ApiService>().setTokens(authState.accessToken, authState.refreshToken);
+          
+          print('📦 MainScreen: Loading commandes for ${authState.user.username}');
+          context.read<CommandeCubit>().loadTodayCommandes();
+        }
       }
+    });
+  }
+
+  // ✅ Start location tracking when driver becomes available
+  void _startLocationTracking() async {
+    try {
+      if (_locationService == null) {
+        // Create ApiService instance
+        final apiService = ApiService();
+        final locationRepository = LocationRepository(apiService);
+        _locationService = LocationService(locationRepository);
+      }
+      
+      await _locationService!.startLocationUpdates();
+      print('📍 Location tracking started');
+    } catch (e) {
+      print('❌ Error starting location tracking: $e');
     }
-  });
-}
+  }
+
+  // ✅ Stop location tracking when driver becomes unavailable
+  void _stopLocationTracking() {
+    if (_locationService != null) {
+      _locationService!.stopLocationUpdates();
+      print('🛑 Location tracking stopped');
+    }
+  }
+
+  @override
+  void dispose() {
+    // ✅ Always stop location tracking when screen is disposed
+    _stopLocationTracking();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -228,7 +262,7 @@ void initState() {
                       ],
                     ),
                   ),
-                  // ✅ FIXED: Availability Toggle that updates properly
+                  // ✅ Availability Toggle with location tracking
                   _buildAvailabilityToggle(user),
                 ],
               ),
@@ -239,9 +273,8 @@ void initState() {
     );
   }
 
-  // ✅ FIXED: Separate method for availability toggle
+  // ✅ Availability toggle with location tracking
   Widget _buildAvailabilityToggle(user) {
-    // Use BlocBuilder to rebuild when auth state changes
     return BlocBuilder<AuthCubit, AuthState>(
       builder: (context, state) {
         if (state is! AuthAuthenticated) return const SizedBox();
@@ -253,6 +286,15 @@ void initState() {
           onTap: () async {
             print('🔄 Toggling availability from $isAvailable to ${!isAvailable}');
             
+            // ✅ Handle location tracking based on availability
+            if (!isAvailable) {
+              // Driver becoming available - start location tracking
+              _startLocationTracking();
+            } else {
+              // Driver becoming unavailable - stop location tracking
+              _stopLocationTracking();
+            }
+            
             // Toggle availability
             await context.read<AuthCubit>().toggleAvailability(!isAvailable);
             
@@ -262,8 +304,8 @@ void initState() {
                 SnackBar(
                   content: Text(
                     !isAvailable
-                        ? 'Vous êtes maintenant disponible'
-                        : 'Vous êtes maintenant indisponible',
+                        ? 'Vous êtes maintenant disponible - Localisation activée'
+                        : 'Vous êtes maintenant indisponible - Localisation désactivée',
                   ),
                   duration: const Duration(seconds: 2),
                   backgroundColor: !isAvailable
